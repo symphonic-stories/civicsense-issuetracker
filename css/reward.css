@@ -1,0 +1,41 @@
+.reward-section, .leaderboard-section {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin-top: 2rem;
+}
+.badge {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: white;
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  margin: 0.3rem;
+  font-weight: 600;
+  display: inline-block;
+}
+.leaderboard-section ul {
+  list-style: none;
+  padding: 0;
+}
+.leaderboard-section li {
+  padding: 0.5rem;
+  border-bottom: 1px solid #eee;
+  font-weight: 500;
+}
+.reward-section button {
+  background: var(--primary);
+  color: white;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  margin-top: 1rem;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.reward-section button:hover {
+  background: var(--primary-dark);
+  transform: scale(1.05);
+}
