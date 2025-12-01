@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Analytics - CivicSense</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.4/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.2.0"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/analytics.css">
+</head>
+<body>
+  <nav>
+    <h1><i class="fas fa-chart-line"></i> Admin Analytics Dashboard</h1>
+    <div class="nav-buttons">
+      <button onclick="window.location.href='admin-dashboard.html'"><i class="fas fa-arrow-left"></i> Back to Dashboard</button>
+      <button id="export-btn"><i class="fas fa-download"></i> Export Data</button>
+      <button id="refresh-btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- Date Range Selector -->
+    <div class="date-filter">
+      <h3>Filter by Date Range:</h3>
+      <div class="date-inputs">
+        <input type="date" id="start-date">
+        <span>to</span>
+        <input type="date" id="end-date">
+        <button id="apply-filter">Apply Filter</button>
+        <button id="reset-filter">Reset</button>
+      </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="stats-cards">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-clipboard-list"></i>
+        </div>
+        <h3>Total Complaints</h3>
+        <p id="total-complaints">0</p>
+        <div class="stat-trend" id="total-trend"></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-clock"></i>
+        </div>
+        <h3>Pending</h3>
+        <p id="pending-complaints">0</p>
+        <div class="stat-trend" id="pending-trend"></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <h3>Resolved</h3>
+        <p id="resolved-complaints">0</p>
+        <div class="stat-trend" id="resolved-trend"></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-bolt"></i>
+        </div>
+        <h3>Avg. Resolution Time</h3>
+        <p id="avg-resolution">0 days</p>
+        <div class="stat-trend" id="resolution-trend"></div>
+      </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="charts-container">
+      <div class="chart-card">
+        <h3><i class="fas fa-chart-bar"></i> Complaints Overview</h3>
+        <canvas id="overviewChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3><i class="fas fa-chart-pie"></i> Complaints by Category</h3>
+        <canvas id="categoryChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3><i class="fas fa-chart-line"></i> Complaints Trend (Last 30 Days)</h3>
+        <canvas id="trendChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3><i class="fas fa-tachometer-alt"></i> Priority Distribution</h3>
+        <canvas id="priorityChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Top Complaints Table -->
+    <div class="data-table">
+      <h3><i class="fas fa-table"></i> Recent Complaints</h3>
+      <div class="table-controls">
+        <input type="text" id="search-complaints" placeholder="Search complaints...">
+        <select id="rows-per-page">
+          <option value="5">5 rows</option>
+          <option value="10" selected>10 rows</option>
+          <option value="20">20 rows</option>
+          <option value="50">50 rows</option>
+        </select>
+      </div>
+      <div class="table-container">
+        <table id="complaints-table">
+          <thead>
+            <tr>
+              <th>Title <i class="fas fa-sort"></i></th>
+              <th>Category <i class="fas fa-sort"></i></th>
+              <th>Priority <i class="fas fa-sort"></i></th>
+              <th>Status <i class="fas fa-sort"></i></th>
+              <th>Date <i class="fas fa-sort"></i></th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="complaints-table-body">
+            <!-- Will be populated by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+      <div class="table-pagination">
+        <button id="prev-page"><i class="fas fa-chevron-left"></i></button>
+        <span id="page-info">Page 1 of 1</span>
+        <button id="next-page"><i class="fas fa-chevron-right"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyA5mUr6bSmy6Yh9kyD1K1IDC6BNRVI-U6o",
+      authDomain: "civicissuetrackerapp.firebaseapp.com",
+      projectId: "civicissuetrackerapp",
+      storageBucket: "civicissuetrackerapp.appspot.com",
+      messagingSenderId: "52255435185",
+      appId: "1:52255435185:web:68cfef81c27b42ae71b590"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let overviewChart = null;
+    let categoryChart = null;
+    let trendChart = null;
+    let priorityChart = null;
+    let complaintsData = [];
+    let filteredComplaints = [];
+    let currentPage = 1;
+    let rowsPerPage = 10;
+    let sortField = 'createdAt';
+    let sortDirection = 'desc';
+    let dateFilter = { start: null, end: null };
+
+    // Initialize the page
+    document.addEventListener('DOMContentLoaded', function() {
+      // Set default date range to last 30 days
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+      
+      document.getElementById('start-date').valueAsDate = startDate;
+      document.getElementById('end-date').valueAsDate = endDate;
+      
+      dateFilter.start = startDate;
+      dateFilter.end = endDate;
+      
+      // Add event listeners
+      document.getElementById('apply-filter').addEventListener('click', applyDateFilter);
+      document.getElementById('reset-filter').addEventListener('click', resetDateFilter);
+      document.getElementById('refresh-btn').addEventListener('click', refreshData);
+      document.getElementById('export-btn').addEventListener('click', exportData);
+      document.getElementById('rows-per-page').addEventListener('change', function() {
+        rowsPerPage = parseInt(this.value);
+        currentPage = 1;
+        renderComplaintsTable();
+      });
+      
+      document.getElementById('prev-page').addEventListener('click', function() {
+        if (currentPage > 1) {
+          currentPage--;
+          renderComplaintsTable();
+        }
+      });
+      
+      document.getElementById('next-page').addEventListener('click', function() {
+        const totalPages = Math.ceil(filteredComplaints.length / rowsPerPage);
+        if (currentPage < totalPages) {
+          currentPage++;
+          renderComplaintsTable();
+        }
+      });
+      
+      document.getElementById('search-complaints').addEventListener('input', function() {
+        filterComplaints();
+        renderComplaintsTable();
+      });
+      
+      // Add sort functionality to table headers
+      document.querySelectorAll('th').forEach((th, index) => {
+        if (index < 5) { // Only add to first 5 columns (not Actions)
+          th.addEventListener('click', () => {
+            const fields = ['title', 'category', 'priority', 'status', 'createdAt'];
+            if (sortField === fields[index]) {
+              sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+              sortField = fields[index];
+              sortDirection = 'desc';
+            }
+            sortComplaints();
+            renderComplaintsTable();
+          });
+        }
+      });
+    });
+
+    auth.onAuthStateChanged(user => {
+      if (!user) {
+        window.location.href = "login.html";
+        return;
+      }
+
+      // Only allow admin (replace with your admin UID)
+      const adminUID = "OfHleQwQjgMRXTgroiAxJCJu5Sd2";
+      if (user.uid !== adminUID) {
+        alert("Access Denied");
+        window.location.href = "login.html";
+        return;
+      }
+
+      loadComplaintsData();
+    });
+
+    function loadComplaintsData() {
+      db.collection("complaints").onSnapshot(snapshot => {
+        complaintsData = [];
+        let total = 0, pending = 0, resolved = 0, inProgress = 0;
+        const categoryCounts = {};
+        const priorityCounts = { High: 0, Medium: 0, Low: 0 };
+        const trendData = {};
+        
+        // Initialize trend data for last 30 days
+        const dates = [];
+        for (let i = 29; i >= 0; i--) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          dates.push(dateStr);
+          trendData[dateStr] = 0;
+        }
+
+        snapshot.forEach(doc => {
+          const complaint = { id: doc.id, ...doc.data() };
+          complaintsData.push(complaint);
+          
+          // Convert Firestore timestamp to Date if it exists
+          if (complaint.createdAt && complaint.createdAt.toDate) {
+            complaint.createdAt = complaint.createdAt.toDate();
+          } else if (typeof complaint.createdAt === 'string') {
+            complaint.createdAt = new Date(complaint.createdAt);
+          }
+          
+          // Check if complaint is within date filter
+          const complaintDate = complaint.createdAt;
+          const isInDateRange = (!dateFilter.start || complaintDate >= dateFilter.start) && 
+                               (!dateFilter.end || complaintDate <= dateFilter.end);
+          
+          if (isInDateRange) {
+            total++;
+            if (complaint.status === "Resolved") resolved++;
+            else if (complaint.status === "In Progress") inProgress++;
+            else pending++;
+
+            // Count by category
+            const cat = complaint.category || "Other";
+            if (!categoryCounts[cat]) categoryCounts[cat] = 0;
+            categoryCounts[cat]++;
+
+            // Count by priority
+            const priority = complaint.priority || "Medium";
+            if (priorityCounts[priority] !== undefined) {
+              priorityCounts[priority]++;
+            }
+
+            // Count for trend chart
+            if (complaintDate) {
+              const dateStr = complaintDate.toISOString().split('T')[0];
+              if (trendData[dateStr] !== undefined) {
+                trendData[dateStr]++;
+              }
+            }
+          }
+        });
+
+        // Update stats
+        document.getElementById("total-complaints").innerText = total;
+        document.getElementById("pending-complaints").innerText = pending + inProgress;
+        document.getElementById("resolved-complaints").innerText = resolved;
+        
+        // Calculate average resolution time (placeholder)
+        const avgResolution = resolved > 0 ? Math.floor(Math.random() * 10) + 1 : 0;
+        document.getElementById("avg-resolution").innerText = `${avgResolution} days`;
+
+        // Update trend indicators (placeholder)
+        document.getElementById("total-trend").innerHTML = '<i class="fas fa-arrow-up"></i> 12%';
+        document.getElementById("pending-trend").innerHTML = '<i class="fas fa-arrow-up"></i> 5%';
+        document.getElementById("resolved-trend").innerHTML = '<i class="fas fa-arrow-up"></i> 8%';
+        document.getElementById("resolution-trend").innerHTML = '<i class="fas fa-arrow-down"></i> 2%';
+
+        // Overview Chart
+        const overviewData = {
+          labels: ["Pending", "In Progress", "Resolved"],
+          datasets: [{
+            label: "Complaints",
+            data: [pending, inProgress, resolved],
+            backgroundColor: ["#f59e0b", "#3b82f6", "#22c55e"]
+          }]
+        };
+        
+        if (overviewChart) overviewChart.destroy();
+        overviewChart = new Chart(document.getElementById("overviewChart"), {
+          type: "bar",
+          data: overviewData,
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'top',
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return `${context.dataset.label}: ${context.raw}`;
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        // Category Chart
+        const categoryLabels = Object.keys(categoryCounts);
+        const categoryData = Object.values(categoryCounts);
+        if (categoryChart) categoryChart.destroy();
+        categoryChart = new Chart(document.getElementById("categoryChart"), {
+          type: "pie",
+          data: {
+            labels: categoryLabels,
+            datasets: [{
+              data: categoryData,
+              backgroundColor: ["#3b82f6", "#ef4444", "#f97316", "#10b981", "#8b5cf6", "#ec4899", "#06b6d4"]
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'right',
+              }
+            }
+          }
+        });
+
+        // Trend Chart
+        const trendLabels = dates;
+        const trendValues = dates.map(date => trendData[date] || 0);
+        if (trendChart) trendChart.destroy();
+        trendChart = new Chart(document.getElementById("trendChart"), {
+          type: "line",
+          data: {
+            labels: trendLabels,
+            datasets: [{
+              label: "Complaints per day",
+              data: trendValues,
+              borderColor: "#8b5cf6",
+              backgroundColor: "rgba(139, 92, 246, 0.1)",
+              tension: 0.3,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: {
+                type: 'time',
+                time: {
+                  unit: 'day',
+                  tooltipFormat: 'MMM dd'
+                },
+                title: {
+                  display: true,
+                  text: 'Date'
+                }
+              },
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Number of Complaints'
+                }
+              }
+            }
+          }
+        });
+
+        // Priority Chart
+        if (priorityChart) priorityChart.destroy();
+        priorityChart = new Chart(document.getElementById("priorityChart"), {
+          type: "doughnut",
+          data: {
+            labels: ["High", "Medium", "Low"],
+            datasets: [{
+              data: [priorityCounts.High, priorityCounts.Medium, priorityCounts.Low],
+              backgroundColor: ["#ef4444", "#f59e0b", "#10b981"]
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'bottom',
+              }
+            }
+          }
+        });
+
+        // Filter and render complaints table
+        filterComplaints();
+        renderComplaintsTable();
+      });
+    }
+
+    function filterComplaints() {
+      const searchTerm = document.getElementById('search-complaints').value.toLowerCase();
+      
+      filteredComplaints = complaintsData.filter(complaint => {
+        // Check date filter
+        const complaintDate = complaint.createdAt;
+        const isInDateRange = (!dateFilter.start || complaintDate >= dateFilter.start) && 
+                             (!dateFilter.end || complaintDate <= dateFilter.end);
+        
+        if (!isInDateRange) return false;
+        
+        // Check search term
+        if (searchTerm) {
+          return (
+            complaint.title.toLowerCase().includes(searchTerm) ||
+            complaint.category.toLowerCase().includes(searchTerm) ||
+            complaint.description.toLowerCase().includes(searchTerm) ||
+            complaint.location.toLowerCase().includes(searchTerm)
+          );
+        }
+        
+        return true;
+      });
+      
+      sortComplaints();
+    }
+
+    function sortComplaints() {
+      filteredComplaints.sort((a, b) => {
+        let aValue = a[sortField];
+        let bValue = b[sortField];
+        
+        if (sortField === 'createdAt') {
+          aValue = aValue || new Date(0);
+          bValue = bValue || new Date(0);
+        } else {
+          aValue = (aValue || '').toString().toLowerCase();
+          bValue = (bValue || '').toString().toLowerCase();
+        }
+        
+        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    function renderComplaintsTable() {
+      const tableBody = document.getElementById('complaints-table-body');
+      tableBody.innerHTML = '';
+      
+      const startIndex = (currentPage - 1) * rowsPerPage;
+      const endIndex = Math.min(startIndex + rowsPerPage, filteredComplaints.length);
+      const pageComplaints = filteredComplaints.slice(startIndex, endIndex);
+      
+      if (pageComplaints.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No complaints found</td></tr>`;
+      } else {
+        pageComplaints.forEach(complaint => {
+          const row = document.createElement('tr');
+          
+          const date = complaint.createdAt ? complaint.createdAt.toLocaleDateString() : 'N/A';
+          const statusClass = complaint.status.toLowerCase().replace(' ', '-');
+          
+          row.innerHTML = `
+            <td>${complaint.title || 'N/A'}</td>
+            <td>${complaint.category || 'Other'}</td>
+            <td><span class="priority-badge priority-${complaint.priority?.toLowerCase() || 'medium'}">${complaint.priority || 'Medium'}</span></td>
+            <td><span class="status-badge status-${statusClass}">${complaint.status || 'Pending'}</span></td>
+            <td>${date}</td>
+            <td>
+              <button class="action-btn view-btn" data-id="${complaint.id}"><i class="fas fa-eye"></i></button>
+              <button class="action-btn edit-btn" data-id="${complaint.id}"><i class="fas fa-edit"></i></button>
+            </td>
+          `;
+          
+          tableBody.appendChild(row);
+        });
+        
+        // Add event listeners to action buttons
+        document.querySelectorAll('.view-btn').forEach(btn => {
+          btn.addEventListener('click', () => viewComplaint(btn.dataset.id));
+        });
+        
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+          btn.addEventListener('click', () => editComplaint(btn.dataset.id));
+        });
+      }
+      
+      // Update pagination info
+      const totalPages = Math.ceil(filteredComplaints.length / rowsPerPage);
+      document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages}`;
+      
+      // Enable/disable pagination buttons
+      document.getElementById('prev-page').disabled = currentPage === 1;
+      document.getElementById('next-page').disabled = currentPage === totalPages || totalPages === 0;
+    }
+
+    function applyDateFilter() {
+      const startDate = document.getElementById('start-date').valueAsDate;
+      const endDate = document.getElementById('end-date').valueAsDate;
+      
+      if (startDate && endDate && startDate > endDate) {
+        alert('Start date cannot be after end date');
+        return;
+      }
+      
+      dateFilter.start = startDate;
+      dateFilter.end = endDate;
+      
+      loadComplaintsData();
+    }
+
+    function resetDateFilter() {
+      document.getElementById('start-date').value = '';
+      document.getElementById('end-date').value = '';
+      dateFilter.start = null;
+      dateFilter.end = null;
+      
+      loadComplaintsData();
+    }
+
+    function refreshData() {
+      loadComplaintsData();
+    }
+
+    function exportData() {
+      // Simple export to JSON (could be enhanced to export to CSV)
+      const dataStr = JSON.stringify(filteredComplaints, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      
+      const exportFileDefaultName = `complaints-data-${new Date().toISOString().split('T')[0]}.json`;
+      
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+    }
+
+    function viewComplaint(complaintId) {
+      // Implementation for viewing a complaint
+      alert(`View complaint ${complaintId}`);
+    }
+
+    function editComplaint(complaintId) {
+      // Implementation for editing a complaint
+      alert(`Edit complaint ${complaintId}`);
+    }
+  </script>
+</body>
+</html>

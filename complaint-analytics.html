@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Citizen Dashboard - CivicSense</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+   <!-- 🌐 Navbar -->
+  <header>
+    <nav class="navbar">
+            <div class="logo">
+        <!-- ✅ Added your custom logo -->
+        <img src="images\logocivic.png" alt="CivicSense Logo" />
+        <!-- <h1>CivicSense</h1> -->
+      </div>
+      <ul class="nav-links">
+        <li><a href="citizen-dashboard.html">Home</a></li>
+        <li><a href="report.html">Report</a></li>
+        <li><a href="my-reports.html">History</a></li>
+        <li><a href="news.html">News</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="complaint-analytics.html" class="active">Analytics</a></li>
+      </ul>
+      <div>
+        <a href="emergency.html" class="btn-emergency" style="background-color: red;">Emergency</a>
+      <a href="index.html" class="btn-login">Logout</a>
+
+      </div>
+      
+    </nav>
+  </header>
+
+  <!-- Dashboard Content -->
+  <div class="dashboard-container">
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" style="display:none;">
+      <h2 id="welcome-text"></h2>
+      <p>Please complete your profile:</p>
+      <div class="input-group">
+        <input type="text" id="name" placeholder="Full Name" required>
+      </div>
+      <div class="input-group">
+        <input type="number" id="age" placeholder="Age" required>
+      </div>
+      <div class="input-group">
+        <select id="sex" required>
+          <option value="">Select Sex</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <button id="save-profile-btn">Save Profile</button>
+    </div>
+
+    <!-- Dashboard Screen -->
+    <div id="dashboard-screen" style="display:none;">
+      <h1>Welcome back, <span id="user-name"></span></h1>
+      
+      <!-- Professional Analytics Dashboard -->
+      <div class="analytics-dashboard">
+        <div class="dashboard-header">
+          <h2 class="dashboard-title">Complaints Analytics</h2>
+        </div>
+        
+
+        
+        <div class="stats-cards">
+          <div class="stat-card">
+            <div class="stat-icon complaints-icon">
+              <i class="fas fa-flag"></i>
+            </div>
+            <div class="stat-title">Total Complaints</div>
+            <div class="stat-value" id="complaint-count">0</div>
+            
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon pending-icon">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-title">Pending</div>
+            <div class="stat-value" id="pending-count">0</div>
+            
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon resolved-icon">
+              <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-title">Resolved</div>
+            <div class="stat-value" id="resolved-count">0</div>
+            
+          </div>
+        </div>
+        
+        <div class="charts-container">
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Complaints Overview</div>
+              
+            </div>
+            <canvas id="overviewChart" width="400" height="200"></canvas>
+          </div>
+          
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">By Category</div>
+              <div class="chart-actions">
+                <button>View All</button>
+              </div>
+            </div>
+            <canvas id="categoryChart" width="400" height="200"></canvas>
+          </div>
+        </div>
+        
+        <div class="recent-activity">
+          <div class="activity-header">
+            <div class="activity-title">Recent Activity</div>
+            <a href="#" class="view-all">View All</a>
+          </div>
+          
+          <ul class="activity-list" id="recent-complaints">
+            <!-- Recent complaints will be populated here -->
+            <li class="activity-item">
+              <div class="activity-icon">
+                <i class="fas fa-road"></i>
+              </div>
+              <div class="activity-content">
+                <div class="activity-description">Pothole reported on Main Street</div>
+                <div class="activity-time">2 days ago</div>
+              </div>
+              <div class="activity-status status-in-progress">In Progress</div>
+            </li>
+            
+            <li class="activity-item">
+              <div class="activity-icon">
+                <i class="fas fa-lightbulb"></i>
+              </div>
+              <div class="activity-content">
+                <div class="activity-description">Street light outage in Oak Park</div>
+                <div class="activity-time">5 days ago</div>
+              </div>
+              <div class="activity-status status-pending">Pending</div>
+            </li>
+            
+            <li class="activity-item">
+              <div class="activity-icon">
+                <i class="fas fa-trash"></i>
+              </div>
+              <div class="activity-content">
+                <div class="activity-description">Garbage collection complaint</div>
+                <div class="activity-time">1 week ago</div>
+              </div>
+              <div class="activity-status status-resolved">Resolved</div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    
+
+  // Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyA5mUr6bSmy6Yh9kyD1K1IDC6BNRVI-U6o",
+    authDomain: "civicissuetrackerapp.firebaseapp.com",
+    projectId: "civicissuetrackerapp",
+    storageBucket: "civicissuetrackerapp.appspot.com",
+    messagingSenderId: "52255435185",
+    appId: "1:52255435185:web:68cfef81c27b42ae71b590"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  const welcomeScreen = document.getElementById('welcome-screen');
+  const dashboardScreen = document.getElementById('dashboard-screen');
+  const welcomeText = document.getElementById('welcome-text');
+  const saveProfileBtn = document.getElementById('save-profile-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+  const complaintCountEl = document.getElementById('complaint-count');
+  const pendingCountEl = document.getElementById('pending-count');
+  const resolvedCountEl = document.getElementById('resolved-count');
+  const userNameEl = document.getElementById('user-name');
+  const recentComplaintsEl = document.getElementById("recent-complaints");
+
+  // Chart variables
+  let overviewChart, categoryChart;
+
+  // Auth state check
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      window.location.href = "login.html";
+      return;
+    }
+
+    const uid = user.uid;
+    const userDoc = await db.collection('users').doc(uid).get();
+
+    if (!userDoc.exists || !userDoc.data().profileCompleted) {
+      // Show welcome screen
+      welcomeScreen.style.display = 'block';
+      welcomeText.innerText = `Welcome ${user.email}`;
+    } else {
+      // Show dashboard
+      dashboardScreen.style.display = 'block';
+      userNameEl.innerText = userDoc.data().name || user.email;
+
+      // Fetch complaints for this user
+      db.collection("complaints")
+        .where("userId", "==", uid)
+        .onSnapshot(snapshot => {
+          let total = 0, pending = 0, resolved = 0;
+          let categoryCounts = {};
+          recentComplaintsEl.innerHTML = ""; // clear list
+
+          snapshot.forEach(doc => {
+            const complaint = doc.data();
+            total++;
+
+            // Status counts
+            if (complaint.status === "Resolved") resolved++;
+            else pending++;
+
+            // Category counts
+            if (complaint.category) {
+              categoryCounts[complaint.category] =
+                (categoryCounts[complaint.category] || 0) + 1;
+            }
+
+            // Add to recent activity
+            const li = document.createElement("li");
+            li.className = "activity-item";
+            li.innerHTML = `
+              <div class="activity-icon"><i class="fas fa-flag"></i></div>
+              <div class="activity-content">
+                <div class="activity-description">${complaint.title}</div>
+                <div class="activity-time">
+                  ${complaint.createdAt?.toDate().toLocaleString() || ""}
+                </div>
+              </div>
+              <div class="activity-status ${
+                complaint.status === "Resolved" ? "status-resolved" : "status-pending"
+              }">${complaint.status}</div>
+            `;
+            recentComplaintsEl.appendChild(li);
+          });
+
+          // Update counts
+          complaintCountEl.innerText = total;
+          pendingCountEl.innerText = pending;
+          resolvedCountEl.innerText = resolved;
+
+          // === Update Charts ===
+          updateOverviewChart(pending, resolved);
+          updateCategoryChart(categoryCounts);
+        });
+    }
+  });
+
+  // --- Chart functions ---
+  function updateOverviewChart(pending, resolved) {
+    const ctx = document.getElementById("overviewChart").getContext("2d");
+    if (overviewChart) overviewChart.destroy();
+    overviewChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: ["Pending", "Resolved"],
+        datasets: [{
+          label: "Complaints",
+          data: [pending, resolved],
+          backgroundColor: ["#facc15", "#22c55e"]
+        }]
+      },
+      options: { responsive: true }
+    });
+  }
+
+  function updateCategoryChart(categoryCounts) {
+    const ctx = document.getElementById("categoryChart").getContext("2d");
+    if (categoryChart) categoryChart.destroy();
+    categoryChart = new Chart(ctx, {
+      type: "pie",
+      data: {
+        labels: Object.keys(categoryCounts),
+        datasets: [{
+          data: Object.values(categoryCounts),
+          backgroundColor: ["#3b82f6", "#ef4444", "#f97316", "#10b981", "#8b5cf6"]
+        }]
+      },
+      options: { responsive: true }
+    });
+  }
+
+  // Save profile
+  saveProfileBtn.addEventListener('click', async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const name = document.getElementById('name').value.trim();
+    const age = document.getElementById('age').value.trim();
+    const sex = document.getElementById('sex').value;
+
+    if (!name || !age || !sex) {
+      alert("Please fill all fields!");
+      return;
+    }
+
+    await db.collection('users').doc(user.uid).set({
+      email: user.email,
+      name,
+      age,
+      sex,
+      complaints: 0,
+      profileCompleted: true
+    }, { merge: true });
+
+    alert("Profile saved successfully!");
+    window.location.reload();
+  });
+
+  // Logout
+  logoutBtn.addEventListener('click', () => {
+    auth.signOut().then(() => {
+      window.location.href = "index.html";
+    });
+  });
+  emergencyBtn.addEventListener('click', () => {
+    auth.signOut().then(() => {
+      window.location.href = "emergency.html";
+    });
+  });
+
+
+  // Navbar scroll effect
+  window.addEventListener('scroll', () => {
+    const navbar = document.querySelector('.navbar');
+    if (window.scrollY > 10) {
+      navbar.classList.add('scrolled');
+    } else {
+      navbar.classList.remove('scrolled');
+    }
+  });
+
+
+  </script>
+  <script src="js/rewards.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reward History - CivicSense</title>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body {
+      padding: 20px;
+      font-family: Arial;
+    }
+
+    h1 { margin-bottom: 20px; }
+
+    .coupon-card {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 15px;
+      background: #f9f9f9;
+    }
+
+    .coupon-code {
+      font-size: 1.3rem;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .back-btn {
+      padding: 10px 20px;
+      background: #2563eb;
+      color: white;
+      border-radius: 8px;
+      text-decoration: none;
+      display: inline-block;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+
+<body>
+
+<a href="citizen-dashboard.html" class="back-btn">⬅ Back to Dashboard</a>
+
+<h1>🎟 Reward History</h1>
+
+<div id="historyList">Loading...</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyA5mUr6bSmy6Yh9kyD1K1IDC6BNRVI-U6o",
+  authDomain: "civicissuetrackerapp.firebaseapp.com",
+  projectId: "civicissuetrackerapp",
+  storageBucket: "civicissuetrackerapp.appspot.com",
+  messagingSenderId: "52255435185",
+  appId: "1:52255435185:web:68cfef81c27b42ae71b590"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// LOAD COUPON HISTORY
+auth.onAuthStateChanged(async (user) => {
+  if (!user) return window.location.href = "login.html";
+
+  const uid = user.uid;
+  const ref = db.collection("users").doc(uid);
+  const snap = await ref.get();
+
+  const data = snap.data() || {};
+  const coupons = Array.isArray(data.coupons) ? data.coupons : [];
+
+  const list = document.getElementById("historyList");
+  list.innerHTML = "";
+
+  if (coupons.length === 0) {
+    list.innerHTML = "<p>No reward coupons claimed yet.</p>";
+    return;
+  }
+
+  coupons.forEach(c => {
+    const card = document.createElement("div");
+    card.className = "coupon-card";
+
+    card.innerHTML = `
+      <div class="coupon-code">${c.code}</div>
+      <p><strong>Discount:</strong> ${c.discount}% OFF</p>
+      <p><strong>Expiry:</strong> ${new Date(c.expires).toLocaleDateString()}</p>
+      <p><strong>Issued:</strong> ${new Date(c.issuedAt).toLocaleString()}</p>
+      <p><strong>Milestone:</strong> ${c.milestone * 100} pts</p>
+    `;
+
+    list.appendChild(card);
+  });
+});
+</script>
+
+</body>
+</html>

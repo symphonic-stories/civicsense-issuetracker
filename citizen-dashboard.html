@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Citizen Dashboard - CivicSense</title>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- Icons + CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="stylesheet" href="css/style.css">
+
+  <style>
+    .points-toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #22c55e;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 1.2rem;
+      opacity: 0;
+      transform: translateY(-20px);
+      transition: 0.4s;
+      z-index: 9999;
+      font-weight: bold;
+    }
+    .points-toast.show { opacity: 1; transform: translateY(0); }
+
+    .badge-toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #2563eb;
+      color: white;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      opacity: 0;
+      transform: translateY(30px);
+      transition: 0.4s;
+      z-index: 9999;
+    }
+    .badge-toast.show { opacity: 1; transform: translateY(0); }
+
+    .badge.new-badge {
+      animation: glowBadge 1s ease-out;
+    }
+
+    @keyframes glowBadge {
+      0% { box-shadow: 0 0 0px #facc15; }
+      50% { box-shadow: 0 0 20px #facc15; }
+      100% { box-shadow: 0 0 0px #facc15; }
+    }
+
+    .progress-bar { transition: width 0.6s ease; }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+</head>
+
+<body>
+
+<header>
+  <nav class="navbar">
+    <div class="logo">
+      <img src="images/logocivic.png" alt="CivicSense Logo" />
+    </div>
+
+    <ul class="nav-links">
+      <li><a href="citizen-dashboard.html" class="active">Home</a></li>
+      <li><a href="report.html">Report</a></li>
+      <li><a href="my-reports.html">History</a></li>
+      <li><a href="news.html">News</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="complaint-analytics.html">Analytics</a></li>
+    </ul>
+
+    <div>
+      <a href="emergency.html" class="btn-emergency" style="background:red;">Emergency</a>
+      <a href="index.html" class="btn-login">Logout</a>
+    </div>
+  </nav>
+</header>
+
+
+<div class="dashboard-container">
+
+<!-- PROFILE SCREEN -->
+<div id="welcome-screen" style="display:none;">
+  <h2 id="welcome-text"></h2>
+  <p>Please complete your profile:</p>
+
+  <div class="input-group"><input type="text" id="name" placeholder="Full Name"></div>
+  <div class="input-group"><input type="number" id="age" placeholder="Age"></div>
+  <div class="input-group">
+    <select id="sex">
+      <option value="">Select Sex</option>
+      <option>Male</option>
+      <option>Female</option>
+      <option>Other</option>
+    </select>
+  </div>
+
+  <button id="save-profile-btn">Save Profile</button>
+</div>
+
+
+<!-- MAIN DASHBOARD -->
+<div id="dashboard-screen" style="display:none;">
+  <h1>Welcome back, <span id="user-name"></span></h1>
+
+  <div id="Rewards" class="reward-section">
+    <h2>🏆 My Rewards</h2>
+
+    <p>Total Points: <span id="userPoints">0</span></p>
+
+    <div class="progress-container">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <p id="progressText">Next Reward: 100 points</p>
+
+    <h3>🎁 Rewards</h3>
+
+    <div id="rewardSection">
+
+      <p id="rewardMessage">Reach 100 pts to unlock a reward!</p>
+
+      <button id="claimRewardBtn" style="
+        display:none;
+        padding:10px 20px;
+        background:#2563eb;
+        color:white;
+        border:none;
+        border-radius:8px;
+        cursor:pointer;">
+        🎟 Claim Reward
+      </button>
+
+      <!-- NEW CLEAN BUTTON -->
+      <a href="reward-history.html" class="btn-primary-reward" style=" display:inline-block;">
+        📜 View Reward History
+      </a>
+
+    </div>
+
+    <h3>🎖️ Badges Earned</h3>
+    <div id="userBadges" class="badges"></div>
+  </div>
+
+  <div class="leaderboard-section">
+    <h2>🏅 Top Citizens</h2>
+    <ul id="leaderboardList"></ul>
+  </div>
+
+  <a href="complaint-analytics.html" class="btn-primary-report">Go to Complaint Analytics</a>
+</div>
+
+<div id="badgeToast" class="badge-toast"></div>
+<div id="pointsToast" class="points-toast">+10 Points!</div>
+
+</div>
+
+<script>
+/* Firebase Init */
+const firebaseConfig = {
+  apiKey: "AIzaSyA5mUr6bSmy6Yh9kyD1K1IDC6BNRVI-U6o",
+  authDomain: "civicissuetrackerapp.firebaseapp.com",
+  projectId: "civicissuetrackerapp",
+  storageBucket: "civicissuetrackerapp.appspot.com",
+  messagingSenderId: "52255435185",
+  appId: "1:52255435185:web:68cfef81c27b42ae71b590"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+window.auth = auth;
+window.db = db;
+
+
+const welcomeScreen = document.getElementById('welcome-screen');
+const dashboardScreen = document.getElementById('dashboard-screen');
+const welcomeText = document.getElementById('welcome-text');
+const userNameEl = document.getElementById('user-name');
+const saveProfileBtn = document.getElementById('save-profile-btn');
+
+
+/* AUTH LISTENER */
+auth.onAuthStateChanged(async (user) => {
+  if (!user) return window.location.href = "login.html";
+
+  const uid = user.uid;
+  const userDoc = await db.collection("users").doc(uid).get();
+
+  if (!userDoc.exists || !userDoc.data().profileCompleted) {
+    welcomeScreen.style.display = "block";
+    welcomeText.innerText = `Welcome ${user.email}`;
+    return;
+  }
+
+  dashboardScreen.style.display = "block";
+  userNameEl.innerText = userDoc.data().name || user.email;
+
+  setTimeout(() => {
+    loadRewards(uid);
+    loadLeaderboard();
+    listenToComplaintDeletions(uid);
+  }, 400);
+});
+
+
+/* SAVE PROFILE */
+saveProfileBtn.addEventListener("click", async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const name = document.getElementById("name").value.trim();
+  const age = document.getElementById("age").value.trim();
+  const sex = document.getElementById("sex").value;
+
+  if (!name || !age || !sex) return alert("Fill all fields");
+
+  await db.collection("users").doc(user.uid).set({
+    email: user.email,
+    name, age, sex,
+    points: 0,
+    badges: [],
+    profileCompleted: true
+  }, { merge: true });
+
+  alert("Profile saved!");
+  window.location.reload();
+});
+
+
+/* NAVBAR SCROLL EFFECT */
+window.addEventListener('scroll', () => {
+  document.querySelector('.navbar')
+    .classList.toggle('scrolled', window.scrollY > 10);
+});
+</script>
+
+<!-- Load reward system LAST -->
+<script src="js/reward.js"></script>
+
+</body>
+</html>

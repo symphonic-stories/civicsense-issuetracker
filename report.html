@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Report a Complaint</title>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+  <link rel="stylesheet" href="css/report.css" />
+</head>
+<body>
+  <!-- 🌐 Navbar -->
+  <header>
+    <nav class="navbar">
+      <div class="logo">
+        <img src="images/logocivic.png" alt="CivicSense Logo" />
+      </div>
+      <ul class="nav-links">
+        <li><a href="citizen-dashboard.html">Home</a></li>
+        <li><a href="#" class="active">Report</a></li>
+        <li><a href="my-reports.html">History</a></li>
+        <li><a href="news.html">News</a></li>
+        <li><a href="#about">About</a></li>
+      </ul>
+      <a href="index.html" class="btn-login">Logout</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <h3>Complaint Form</h3>
+    <form id="complaint-form">
+      <!-- Issue Category -->
+      <label>Issue Category</label>
+      <select id="category" required>
+        <option value="">Select</option>
+        <option value="Road">Road</option>
+        <option value="Water">Water</option>
+        <option value="Electricity">Electricity</option>
+        <option value="Garbage">Garbage</option>
+        <option value="Other">Other</option>
+      </select><br>
+
+      <!-- Issue Title -->
+      <label>Issue Title</label>
+      <input type="text" id="title" placeholder="Enter issue title" required /><br>
+
+      <!-- Description -->
+      <label>Detailed Description</label>
+      <textarea id="description" placeholder="Enter details" required></textarea><br>
+
+      <!-- Location -->
+      <label>Location (Optional)</label>
+      <input type="text" id="location" placeholder="Enter location manually or use auto-detect" /><br>
+      <button type="button" id="detect-location">📍 Use My Current Location</button><br /><br>
+
+      <!-- Priority -->
+      <label>Priority</label>
+      <select id="priority" required>
+        <option value="">Select</option>
+        <option value="Low">Low</option>
+        <option value="Medium">Medium</option>
+        <option value="High">High</option>
+      </select><br>
+
+      <!-- Photo -->
+      <label>Photo (Optional)</label>
+      <input type="file" id="photo" accept="image/*" /><br>
+
+      <!-- Phone Number -->
+      <label>Phone Number (Optional)</label>
+      <input type="text" id="phone" placeholder="Enter phone number" /><br /><br>
+
+      <button type="submit">Submit Complaint</button>
+    </form>
+  </div>
+
+  <script>
+    console.log("JS IS RUNNING");
+
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyA5mUr6bSmy6Yh9kyD1K1IDC6BNRVI-U6o",
+      authDomain: "civicissuetrackerapp.firebaseapp.com",
+      projectId: "civicissuetrackerapp",
+      storageBucket: "civicissuetrackerapp.appspot.com",
+      messagingSenderId: "52255435185",
+      appId: "1:52255435185:web:68cfef81c27b42ae71b590"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    const form = document.getElementById("complaint-form");
+    const detectBtn = document.getElementById("detect-location");
+
+    let detectedLat = null;
+    let detectedLng = null;
+
+    // Detect location when button clicked
+    detectBtn.addEventListener("click", () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            detectedLat = pos.coords.latitude;
+            detectedLng = pos.coords.longitude;
+            document.getElementById("location").value = `Lat: ${detectedLat}, Lng: ${detectedLng}`;
+          },
+          (err) => {
+            alert("Location access denied. Please enter manually.");
+          }
+        );
+      } else {
+        alert("Geolocation is not supported by this browser.");
+      }
+    });
+
+    // Cloudinary config
+    const CLOUD_NAME = "drog9wxmw"; // from Cloudinary Dashboard
+    const UPLOAD_PRESET = "unsigned_preset"; // your preset name
+
+    // Submit complaint
+    console.log("FORM FOUND?", form);
+
+    form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    console.log("FORM SUBMITTED CLICK OK"); // <--- TEST
+
+
+      // Ensure user is signed in
+      const user = auth.currentUser;
+      if (!user) {
+        alert("You must be logged in to submit a complaint.");
+        return;
+      }
+
+      const category = document.getElementById("category").value;
+      const title = document.getElementById("title").value.trim();
+      const description = document.getElementById("description").value.trim();
+      const locationInput = document.getElementById("location").value.trim();
+      const priority = document.getElementById("priority").value;
+      const phone = document.getElementById("phone").value.trim();
+      const photoFile = document.getElementById("photo").files[0];
+
+      let photoURL = "";
+      let finalLat = detectedLat;
+      let finalLng = detectedLng;
+
+      // If user typed location manually, try to parse it
+      if ((!finalLat && finalLat !== 0) || (!finalLng && finalLng !== 0)) {
+        if (locationInput.includes("Lat:") && locationInput.includes("Lng:")) {
+          try {
+            const parts = locationInput.match(/Lat:\s*([0-9.\-]+),\s*Lng:\s*([0-9.\-]+)/);
+            if (parts) {
+              finalLat = parseFloat(parts[1]);
+              finalLng = parseFloat(parts[2]);
+            }
+          } catch (err) {
+            console.warn("Could not parse manual location input", err);
+          }
+        }
+      }
+
+      try {
+        // Upload to Cloudinary if photo selected
+        if (photoFile) {
+          const formData = new FormData();
+          formData.append("file", photoFile);
+          formData.append("upload_preset", UPLOAD_PRESET);
+
+          const response = await fetch(
+            `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+            { method: "POST", body: formData }
+          );
+
+          const data = await response.json();
+          if (data && data.secure_url) {
+            photoURL = data.secure_url; // Cloudinary URL
+          } else {
+            console.warn("Cloudinary upload returned unexpected response", data);
+          }
+        }
+
+        // Save complaint in Firestore
+        const complaintRef = await db.collection("complaints").add({
+          userId: user.uid,
+          email: user.email,
+          category,
+          title,
+          description,
+          // Always save both string and object form
+          location:
+            (finalLat !== null && finalLng !== null)
+              ? `Lat: ${finalLat}, Lng: ${finalLng}`
+              : (locationInput || "Not provided"),
+          locationCoords:
+            (finalLat !== null && finalLng !== null)
+              ? { lat: finalLat, lng: finalLng }
+              : null,
+          priority,
+          phone: phone || null,
+          photoURL: photoURL || null,
+          status: "Pending",
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // ⭐ GIVE USER 10 POINTS ⭐
+        // Call rewardForComplaint if available (rewards.js provides it).
+        // Fallback: directly increment points to ensure user still gets rewarded.
+        try {
+          if (typeof rewardForComplaint === "function") {
+            // If rewards.js is present, prefer it (may also update badges)
+            await rewardForComplaint(user.uid);
+          } else {
+            // Minimal safe fallback: directly increment points in Firestore
+            await db.collection("users").doc(user.uid).update({
+              points: firebase.firestore.FieldValue.increment(10)
+            });
+          }
+        } catch (rErr) {
+          // Log reward errors but do not block complaint submission
+          console.error("Reward update failed:", rErr);
+        }
+
+        alert("Complaint submitted successfully! You are credited with 10 pts.");
+        window.location.href = "citizen-dashboard.html";
+      } catch (error) {
+        console.error("Submit complaint error:", error);
+        alert("Error: " + (error.message || "Failed to submit complaint"));
+      }
+    });
+  </script>
+
+  
+</body>
+</html>

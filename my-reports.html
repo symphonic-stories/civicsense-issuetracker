@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Reports - CivicSense</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/history.css">
+</head>
+<body>
+    <!-- 🌐 Navbar -->
+  <header>
+    <nav class="navbar">
+            <div class="logo">
+        <!-- ✅ Added your custom logo -->
+        <img src="images\logocivic.png" alt="CivicSense Logo" />
+        <!-- <h1>CivicSense</h1> -->
+      </div>
+      <ul class="nav-links">
+        <li><a href="citizen-dashboard.html" >Home</a></li>
+        <li><a href="report.html">Report</a></li>
+        <li><a href="my-reports.html" class="active">History</a></li>
+        <li><a href="news.html">News</a></li>
+        <li><a href="#about">About</a></li>
+      </ul>
+      <a href="index.html" class="btn-login">Logout</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <h2>Your Complaint History</h2>
+    <ul id="complaint-list" class="complaint-list"></ul>
+  </div>
+
+  <script>
+  // Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyA5mUr6bSmy6Yh9kyD1K1IDC6BNRVI-U6o",
+    authDomain: "civicissuetrackerapp.firebaseapp.com",
+    projectId: "civicissuetrackerapp",
+    storageBucket: "civicissuetrackerapp.appspot.com",
+    messagingSenderId: "52255435185",
+    appId: "1:52255435185:web:68cfef81c27b42ae71b590"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  const complaintListEl = document.getElementById("complaint-list");
+
+  auth.onAuthStateChanged(user => {
+    if (!user) {
+      window.location.href = "login.html";
+      return;
+    }
+
+    const uid = user.uid;
+
+    // Fetch all complaints for this user WITHOUT orderBy (avoids index issues)
+    db.collection("complaints")
+      .where("userId", "==", uid)
+      .get()
+      .then(snapshot => {
+        complaintListEl.innerHTML = ""; // clear existing list
+
+        if (snapshot.empty) {
+          complaintListEl.innerHTML = "<li>No complaints found.</li>";
+          return;
+        }
+
+        // Convert documents to array and sort by createdAt in JS (descending)
+        const complaints = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return { id: doc.id, ...data };
+        }).sort((a, b) => {
+          const timeA = a.createdAt ? a.createdAt.toDate().getTime() : 0;
+          const timeB = b.createdAt ? b.createdAt.toDate().getTime() : 0;
+          return timeB - timeA;
+        });
+
+        complaints.forEach(complaint => {
+          const title = complaint.title || "No title";
+          const category = complaint.category || "Other";
+          const description = complaint.description || "No description";
+          const status = complaint.status || "Pending";
+          const createdAtStr = complaint.createdAt && complaint.createdAt.toDate 
+            ? complaint.createdAt.toDate().toLocaleString() 
+            : "";
+
+          const li = document.createElement("li");
+          li.className = "complaint-item";
+          li.innerHTML = `
+            <div class="complaint-details">
+              <p><strong>${title}</strong> (${category})</p>
+              <p>${description}</p>
+              <p>${createdAtStr}</p>
+            </div>
+            <div class="status ${
+              status.toLowerCase() === "resolved" ? "status-resolved" :
+              status.toLowerCase() === "pending" ? "status-pending" :
+              "status-in-progress"
+            }">${status}</div>
+          `;
+          complaintListEl.appendChild(li);
+        });
+      })
+      .catch(error => {
+        console.error("Error fetching complaints:", error.message);
+        complaintListEl.innerHTML = `<li>Error: ${error.message}</li>`;
+      });
+  });
+</script>
+
+
+</body>
+</html>

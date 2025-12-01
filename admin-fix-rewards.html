@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reward Fix Tool</title>
+</head>
+<body>
+<h2>Fixing ALL Users Rewards…</h2>
+<pre id="log">Starting…</pre>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyA5mUr6bSmy6Yh9kyD1K1IDC6BNRVI-U6o",
+  authDomain: "civicissuetrackerapp.firebaseapp.com",
+  projectId: "civicissuetrackerapp"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Badge milestones
+const milestones = [
+  { pts: 10, name: "First Step" },
+  { pts: 30, name: "Level 1 Citizen" },
+  { pts: 50, name: "Level 2 Citizen" },
+  { pts: 70, name: "Level 3 Citizen" },
+  { pts: 85, name: "Level 4 Citizen" },
+  { pts: 100, name: "Level 5 Citizen" }
+];
+
+// Logger
+function log(msg) {
+  document.getElementById("log").innerText += "\n" + msg;
+}
+
+async function fixAllUsers() {
+  log("Fetching users…");
+
+  const users = await db.collection("users").get();
+
+  log(`Total users found: ${users.size}`);
+
+  for (const doc of users.docs) {
+    const data = doc.data();
+    const points = data.points || 0;
+
+    // Auto-calc correct badges
+    const correctBadges = milestones
+      .filter(m => points >= m.pts)
+      .map(m => m.name);
+
+    await db.collection("users").doc(doc.id).update({
+      badges: correctBadges
+    });
+
+    log(`✔ Updated ${data.email || doc.id}: ${points} pts → [${correctBadges.join(", ")}]`);
+  }
+
+  log("\n🎉 ALL USERS UPDATED SUCCESSFULLY!");
+}
+
+fixAllUsers();
+</script>
+
+</body>
+</html>
